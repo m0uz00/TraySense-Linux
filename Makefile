@@ -1,5 +1,5 @@
 name = TraySense
-VERSION = 1
+VERSION = 1.0.1
 CC := gcc
 CFLAGS := -O2
 DEBUG_CFLAGS := -O0 -g
