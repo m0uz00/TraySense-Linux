@@ -19,7 +19,7 @@ src/icons/         canonical SVG assets
 include/           C headers
 ```
 
-The C backend prints one metric block per sample. Each tray runs the backend as a one-shot (`TraySense --once`), parses the block, and updates only when the values change.
+The C backend prints one metric block per sample. Each tray runs the backend as a one-shot (`TraySense --once`) and parses the block.
 
 ## Metrics
 
@@ -198,3 +198,7 @@ SSD temperature uses the RAM shape in the KDE and GNOME groups, matching the Win
 - KDE applet packages are copies: re-run `kpackagetool6 --type Plasma/Applet --upgrade src/kde` after editing `src/kde`.
 - The GNOME extension is a development symlink; re-login (or restart the shell) after QML/JS changes.
 - Icon layout and palette follow the Windows TraySense design by DMTWEAKS.
+
+## Contributing
+
+See [CONTRIBUTING.md](CONTRIBUTING.md).
