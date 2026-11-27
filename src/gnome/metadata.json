@@ -1,0 +1,15 @@
+{
+  "uuid": "traysense@m0uz00.github.io",
+  "name": "TraySense",
+  "description": "CPU, RAM, GPU and SSD monitor",
+  "shell-version": [
+    "45",
+    "46",
+    "47",
+    "48",
+    "49",
+    "50",
+    "51"
+  ],
+  "version": 1
+}

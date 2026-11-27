@@ -3,3 +3,5 @@
 double getVramUsage();
 
 double getVramTemp();
+
+double getGpuUsage();

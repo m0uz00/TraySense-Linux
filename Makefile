@@ -11,10 +11,12 @@ DBG_NAME = $(name)_debug
 SRC := $(wildcard $(SRC_DIR)/*.c)
 OBJ := $(patsubst $(SRC_DIR)/%.c,$(BUILD_DIR)/%.o,$(SRC))
 
-.PHONY: all release debug run clean
-.DEFAULT_GOAL := release
+.PHONY: all default release debug run clean
+.DEFAULT_GOAL := default
 
-all: release
+all: default
+
+default: $(BUILD_DIR)/$(DBG_NAME)
 
 release: $(BUILD_DIR)/$(name)
 

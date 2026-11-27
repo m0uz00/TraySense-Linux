@@ -24,11 +24,17 @@ typedef struct {
   unsigned long long used;
 } nvmlMemoryV2_t;
 
+typedef struct {
+  unsigned int gpu;
+  unsigned int memory;
+} nvmlUtilization_t;
+
 typedef int (*nvmlInit_t)(void);
 typedef int (*nvmlGetHandle_t)(unsigned int, nvmlDevice_t*);
 typedef int (*nvmlGetMemory_t)(nvmlDevice_t, nvmlMemory_t*);
 typedef int (*nvmlGetMemoryV2_t)(nvmlDevice_t, nvmlMemoryV2_t*);
 typedef int (*nvmlGetTemperature_t)(nvmlDevice_t, int, unsigned int*);
+typedef int (*nvmlGetUtilization_t)(nvmlDevice_t, nvmlUtilization_t*);
 
 typedef enum {
   NVML_UNKNOWN = 0,
@@ -45,8 +51,10 @@ typedef struct {
   char usedPath[FILE_PATH_SIZE];
   char totalPath[FILE_PATH_SIZE];
   char temperaturePath[FILE_PATH_SIZE];
+  char busyPath[FILE_PATH_SIZE];
   bool hasVram;
   bool hasTemperature;
+  bool hasBusy;
   bool scanned;
 } SysfsGpu;
 
@@ -55,6 +63,7 @@ static nvmlDevice_t nvmlDevice;
 static nvmlGetMemory_t getMemory;
 static nvmlGetMemoryV2_t getMemoryV2;
 static nvmlGetTemperature_t getTemperature;
+static nvmlGetUtilization_t getUtilization;
 static SysfsGpu sysfsGpu;
 
 static int copyPath(char* destination, size_t size, const char* source) {
@@ -218,6 +227,7 @@ static void scanSysfsGpu(void) {
   sysfsGpu.scanned = true;
   sysfsGpu.hasVram = false;
   sysfsGpu.hasTemperature = false;
+  sysfsGpu.hasBusy = false;
 
   DIR* directory = opendir("/sys/class/drm");
   if (!directory) {
@@ -227,7 +237,9 @@ static void scanSysfsGpu(void) {
 
   unsigned long long bestTotal = 0;
   char bestDevice[DEVICE_PATH_SIZE] = "";
+  char bestBusyPath[FILE_PATH_SIZE] = "";
   char firstTemperature[FILE_PATH_SIZE] = "";
+  char firstBusy[FILE_PATH_SIZE] = "";
 
   struct dirent* entry;
   while ((entry = readdir(directory)) != NULL) {
@@ -235,6 +247,16 @@ static void scanSysfsGpu(void) {
 
     char devicePath[DEVICE_PATH_SIZE];
     if (buildDevicePath(entry->d_name, devicePath, sizeof(devicePath)) != 0) continue;
+
+    char busyPath[FILE_PATH_SIZE];
+    bool cardHasBusy = false;
+    if (buildPath(devicePath, "/gpu_busy_percent", busyPath, sizeof(busyPath)) == 0) {
+      unsigned long long busy;
+      if (readU64(busyPath, &busy) == 0 && busy <= 100) {
+        cardHasBusy = true;
+        if (firstBusy[0] == '\0') copyPath(firstBusy, sizeof(firstBusy), busyPath);
+      }
+    }
 
     if (firstTemperature[0] == '\0') {
       char temperaturePath[FILE_PATH_SIZE];
@@ -254,12 +276,21 @@ static void scanSysfsGpu(void) {
     copyPath(bestDevice, sizeof(bestDevice), devicePath);
     copyPath(sysfsGpu.usedPath, sizeof(sysfsGpu.usedPath), usedPath);
     copyPath(sysfsGpu.totalPath, sizeof(sysfsGpu.totalPath), totalPath);
+
+    if (cardHasBusy) copyPath(bestBusyPath, sizeof(bestBusyPath), busyPath);
+    else bestBusyPath[0] = '\0';
   }
 
   closedir(directory);
 
   if (bestTotal > 0) {
     sysfsGpu.hasVram = true;
+
+    if (bestBusyPath[0] != '\0') {
+      copyPath(sysfsGpu.busyPath, sizeof(sysfsGpu.busyPath), bestBusyPath);
+      sysfsGpu.hasBusy = true;
+    }
+
     if (findTemperaturePath(bestDevice, sysfsGpu.temperaturePath,
                             sizeof(sysfsGpu.temperaturePath)) == 0)
       sysfsGpu.hasTemperature = true;
@@ -268,7 +299,13 @@ static void scanSysfsGpu(void) {
     sysfsGpu.hasTemperature = true;
   }
 
-  if (!sysfsGpu.hasVram || !sysfsGpu.hasTemperature) sysfsGpu.scanned = false;
+  if (!sysfsGpu.hasVram && firstBusy[0] != '\0') {
+    copyPath(sysfsGpu.busyPath, sizeof(sysfsGpu.busyPath), firstBusy);
+    sysfsGpu.hasBusy = true;
+  }
+
+  if (!sysfsGpu.hasVram || !sysfsGpu.hasTemperature || !sysfsGpu.hasBusy)
+    sysfsGpu.scanned = false;
 }
 
 static NvmlState loadNvml(void) {
@@ -290,6 +327,7 @@ static NvmlState loadNvml(void) {
   getMemory = (nvmlGetMemory_t)dlsym(library, "nvmlDeviceGetMemoryInfo");
   getMemoryV2 = (nvmlGetMemoryV2_t)dlsym(library, "nvmlDeviceGetMemoryInfo_v2");
   getTemperature = (nvmlGetTemperature_t)dlsym(library, "nvmlDeviceGetTemperature");
+  getUtilization = (nvmlGetUtilization_t)dlsym(library, "nvmlDeviceGetUtilizationRates");
 
   if (!initialize || !getHandle || !getMemory || !getTemperature) {
     nvmlState = NVML_UNAVAILABLE;
@@ -330,6 +368,15 @@ static double nvmlTemperature(void) {
   return (double)temperature;
 }
 
+static double nvmlGpuUsage(void) {
+  if (!getUtilization) return -1.0;
+
+  nvmlUtilization_t utilization;
+  if (getUtilization(nvmlDevice, &utilization) != 0) return -1.0;
+
+  return (double)utilization.gpu;
+}
+
 double getVramUsage() {
   if (nvmlState == NVML_READY || loadNvml() == NVML_READY) {
     double usage = nvmlUsage();
@@ -368,4 +415,23 @@ double getVramTemp() {
   }
 
   return temperature;
+}
+
+double getGpuUsage() {
+  if (nvmlState == NVML_READY || loadNvml() == NVML_READY) {
+    double usage = nvmlGpuUsage();
+    if (usage >= 0.0) return usage;
+  }
+
+  scanSysfsGpu();
+  if (!sysfsGpu.hasBusy) return -1.0;
+
+  unsigned long long busy;
+  if (readU64(sysfsGpu.busyPath, &busy) != 0 || busy > 100) {
+    sysfsGpu.scanned = false;
+    sysfsGpu.hasBusy = false;
+    return -1.0;
+  }
+
+  return (double)busy;
 }

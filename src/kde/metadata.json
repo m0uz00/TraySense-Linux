@@ -1,0 +1,18 @@
+{
+  "KPlugin": {
+    "Authors": [
+      {
+        "Name": "m0uz00"
+      }
+    ],
+    "Category": "System Information",
+    "Description": "CPU, RAM, GPU and SSD monitor",
+    "Icon": "utilities-system-monitor",
+    "Id": "org.m0uz00.traysense",
+    "License": "MIT",
+    "Name": "TraySense",
+    "Version": "1.0.1"
+  },
+  "KPackageStructure": "Plasma/Applet",
+  "X-Plasma-API-Minimum-Version": "6.0"
+}
