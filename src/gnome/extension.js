@@ -41,15 +41,6 @@ function degrees(value) {
     return value < 0 ? '--' : Math.round(value) + '°';
 }
 
-function hex(value) {
-    const text = Math.round(value).toString(16);
-    return text.length < 2 ? '0' + text : text;
-}
-
-function color(red, green, blue) {
-    return '#' + hex(red) + hex(green) + hex(blue);
-}
-
 function rgba(tint, alpha) {
     const red = parseInt(tint.substring(1, 3), 16);
     const green = parseInt(tint.substring(3, 5), 16);
@@ -69,19 +60,19 @@ function heatIndex(temperature) {
     return 4;
 }
 
-function tempColor(value, ssd, colors) {
+function tempColor(value, ssd) {
     if (value < 0)
-        return colors.foreground;
+        return null;
 
     const hot = ssd ? 65 : 80;
     const critical = ssd ? 75 : 90;
 
     if (value >= critical)
-        return colors.dark ? '#ff4b41' : '#c81919';
+        return '#ff4b41';
     if (value >= hot)
-        return colors.dark ? '#ffaa37' : '#c35f00';
+        return '#ffaa37';
 
-    return colors.foreground;
+    return null;
 }
 
 class Badge {
@@ -145,7 +136,7 @@ class TraySenseIndicator extends PanelMenu.Button {
         this._iconCache = new Map();
 
         this._box = new St.BoxLayout({
-            spacing: 10,
+            style: 'spacing: 10px;',
             y_align: Clutter.ActorAlign.CENTER,
         });
         this.add_child(this._box);
@@ -193,7 +184,7 @@ class TraySenseIndicator extends PanelMenu.Button {
 
     _makeGroup(children) {
         const group = new St.BoxLayout({
-            spacing: 3,
+            style: 'spacing: 3px;',
             y_align: Clutter.ActorAlign.CENTER,
         });
 
@@ -203,9 +194,10 @@ class TraySenseIndicator extends PanelMenu.Button {
         return group;
     }
 
-    _setLabel(label, text, textColor, opacity = 1.0) {
+    _setLabel(label, text, textColor = null, opacity = 1.0) {
         label.text = text;
-        label.set_style('font-size: 12px; color: ' + textColor + ';');
+        label.set_style('font-size: 12px;' +
+            (textColor ? ' color: ' + textColor + ';' : ''));
         label.opacity = Math.round(opacity * 255);
     }
 
@@ -227,23 +219,6 @@ class TraySenseIndicator extends PanelMenu.Button {
         return icon;
     }
 
-    _themeColors() {
-        const theme = St.ThemeContext.get_for_stage(global.stage);
-        const source = theme.foreground_color;
-        const channel = value => Math.max(0, Math.min(255,
-            Math.round(value > 1 ? value : value * 255)));
-
-        const red = channel(source.red);
-        const green = channel(source.green);
-        const blue = channel(source.blue);
-        const dark = 0.299 * red + 0.587 * green + 0.114 * blue > 128;
-
-        return {
-            foreground: color(red, green, blue),
-            background: dark ? '#1e1e1e' : '#f6f6f6',
-            dark,
-        };
-    }
 
     _poll() {
         if (this._process)
@@ -280,7 +255,6 @@ class TraySenseIndicator extends PanelMenu.Button {
     }
 
     _apply(output) {
-        const colors = this._themeColors();
         const cpu = findValue(output, 'CPU');
         const cpuTemp = findValue(output, 'CPU temp');
         const ram = findValue(output, 'RAM');
@@ -299,15 +273,15 @@ class TraySenseIndicator extends PanelMenu.Button {
             ssdTemp >= 0 ? 'disk-hot-' + heatIndex(ssdTemp) : 'disk-gray',
             '#8C8C8C', false, 0);
 
-        this._setLabel(this._cpuPct, percent(cpu), colors.foreground);
-        this._setLabel(this._cpuTemp, degrees(cpuTemp), tempColor(cpuTemp, false, colors));
-        this._setLabel(this._ramPct, percent(ram), colors.foreground);
-        this._setLabel(this._gpuPct, percent(gpu), colors.foreground);
-        this._setLabel(this._gpuTemp, degrees(gpuTemp), tempColor(gpuTemp, false, colors));
-        this._setLabel(this._vramName, 'VRAM', colors.foreground, 0.6);
+        this._setLabel(this._cpuPct, percent(cpu));
+        this._setLabel(this._cpuTemp, degrees(cpuTemp), tempColor(cpuTemp, false));
+        this._setLabel(this._ramPct, percent(ram));
+        this._setLabel(this._gpuPct, percent(gpu));
+        this._setLabel(this._gpuTemp, degrees(gpuTemp), tempColor(gpuTemp, false));
+        this._setLabel(this._vramName, 'VRAM', null, 0.6);
         this._setLabel(this._vramPct, percent(vram),
-            vram >= 0 ? '#76D75A' : colors.foreground);
-        this._setLabel(this._ssdTemp, degrees(ssdTemp), tempColor(ssdTemp, true, colors));
+            vram >= 0 ? '#76D75A' : null);
+        this._setLabel(this._ssdTemp, degrees(ssdTemp), tempColor(ssdTemp, true));
     }
 
     destroy() {
